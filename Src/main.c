@@ -23,6 +23,8 @@ static void MX_GPIO_LPUART1_Init(void);
 static void MX_LPUART1_UART_Init(void);
 void BspCOM_Init(void);
 
+uint32_t frame_buffer[QCIF_ROWS*QCIF_COLUMNS/2];
+
 /* Retarget printf/puts to USART2 (USB VCP) */
 int _write(int file, char *ptr, int len)
 {
@@ -51,18 +53,39 @@ int main(void){
     // Make printf unbuffered so logs appear immediately
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    SCCB_write_reg(0x12, 0x80); //Reset OV7670
-    HAL_Delay(100);
+    SCCB_write_reg(0x12, 0x80); 
+    HAL_Delay(1000);
     for(int i=0; i < sizeof(OV7670_QCIF_UYVY)/sizeof(OV7670_QCIF_UYVY[0]); i++){
+      HAL_Delay(20);
       SCCB_write_reg(OV7670_QCIF_UYVY[i][0], OV7670_QCIF_UYVY[i][1]);
     }
-    for(int i=0; i < sizeof(OV7670_QCIF_UYVY)/sizeof(OV7670_QCIF_UYVY[0]); i++){
-      SCCB_read_reg(OV7670_QCIF_UYVY[i][0]);
-    }
+    // for(int i=0; i < sizeof(OV7670_TestPattern)/sizeof(OV7670_TestPattern[0]); i++){
+    //   HAL_Delay(20);
+    //   SCCB_write_reg(OV7670_TestPattern[i][0], OV7670_TestPattern[i][1]);
+    // }
+    // for(int i=0; i < sizeof(OV7670_QCIF_UYVY)/sizeof(OV7670_QCIF_UYVY[0]); i++){
+    //   SCCB_read_reg(OV7670_QCIF_UYVY[i][0]);
+    // }
+
+    HAL_Delay(20);
+    printf("Camera Configured\r\nBeginning DCMI Capture\r\n");
+
+    __HAL_DCMI_DISABLE_IT(&hdcmi, DCMI_IT_OVR);
+
+    HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)frame_buffer, QCIF_ROWS*QCIF_COLUMNS/2);
 
     while(1){
-
+      
     }
+}
+
+void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi){
+  printf("Frame Captured\r\n");
+  printf("Words Remaining: %d/12672", hdma_dcmi.Instance->CNDTR);
+}
+
+void HAL_DCMI_ErrorCallback(DCMI_HandleTypeDef *hdcmi){
+  printf("Error");
 }
 
 HAL_StatusTypeDef SCCB_write_reg(uint8_t reg_addr, uint8_t value) {
@@ -124,7 +147,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
   RCC_OscInitStruct.MSICalibrationValue = 0;
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_11;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_9;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -164,8 +187,8 @@ static void MX_DCMI_Init(void)
   /* USER CODE END DCMI_Init 1 */
   hdcmi.Instance = DCMI;
   hdcmi.Init.SynchroMode = DCMI_SYNCHRO_HARDWARE;
-  hdcmi.Init.PCKPolarity = DCMI_PCKPOLARITY_FALLING;
-  hdcmi.Init.VSPolarity = DCMI_VSPOLARITY_LOW;
+  hdcmi.Init.PCKPolarity = DCMI_PCKPOLARITY_RISING;
+  hdcmi.Init.VSPolarity = DCMI_VSPOLARITY_HIGH;
   hdcmi.Init.HSPolarity = DCMI_HSPOLARITY_LOW;
   hdcmi.Init.CaptureRate = DCMI_CR_ALL_FRAME;
   hdcmi.Init.ExtendedDataMode = DCMI_EXTEND_DATA_8B;
