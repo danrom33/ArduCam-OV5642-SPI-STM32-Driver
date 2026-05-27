@@ -10,8 +10,8 @@ DMA_HandleTypeDef hdma_dcmi;
 I2C_HandleTypeDef hi2c1;
 UART_HandleTypeDef hlpuart1;
 
-HAL_StatusTypeDef SCCB_write_reg(uint8_t reg_addr, uint8_t value);
-HAL_StatusTypeDef SCCB_read_reg(uint8_t reg_addr);
+HAL_StatusTypeDef SCCB_write_reg(uint16_t reg_addr, uint8_t value);
+HAL_StatusTypeDef SCCB_read_reg(uint16_t reg_addr);
 
 
 void SystemClock_Config(void);
@@ -23,7 +23,9 @@ static void MX_GPIO_LPUART1_Init(void);
 static void MX_LPUART1_UART_Init(void);
 void BspCOM_Init(void);
 
-uint32_t frame_buffer[QCIF_ROWS*QCIF_COLUMNS/2];
+uint32_t frame_buffer[25000];
+uint8_t capture_done = 0;
+uint32_t jpeg_length = 0;
 
 /* Retarget printf/puts to USART2 (USB VCP) */
 int _write(int file, char *ptr, int len)
@@ -53,61 +55,90 @@ int main(void){
     // Make printf unbuffered so logs appear immediately
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    SCCB_write_reg(0x12, 0x80); 
-    HAL_Delay(1000);
-    for(int i=0; i < sizeof(OV7670_QCIF_UYVY)/sizeof(OV7670_QCIF_UYVY[0]); i++){
-      HAL_Delay(20);
-      SCCB_write_reg(OV7670_QCIF_UYVY[i][0], OV7670_QCIF_UYVY[i][1]);
+    SCCB_write_reg(0x3008, 0x80); //software reset reg
+    for(int i=0; i < sizeof(OV5642_QVGA_Preview)/sizeof(OV5642_QVGA_Preview[0]); i++){
+      SCCB_write_reg(OV5642_QVGA_Preview[i][0], OV5642_QVGA_Preview[i][1]);
     }
+    for(int i=0; i < sizeof(OV5642_JPEG_Capture_QSXGA)/sizeof(OV5642_JPEG_Capture_QSXGA[0]); i++){
+      SCCB_write_reg(OV5642_JPEG_Capture_QSXGA[i][0], OV5642_JPEG_Capture_QSXGA[i][1]);
+    }
+    for(int i=0; i < sizeof(ov5642_320x240)/sizeof(ov5642_320x240[0]); i++){
+      SCCB_write_reg(ov5642_320x240[i][0], ov5642_320x240[i][1]);
+    }
+    HAL_Delay(100);
+    SCCB_write_reg(0x3818, 0xa8);
+    SCCB_write_reg(0x3621, 0x10);
+    SCCB_write_reg(0x3801, 0xb0);
+    SCCB_write_reg(0x4407, 0x04);
     // for(int i=0; i < sizeof(OV7670_TestPattern)/sizeof(OV7670_TestPattern[0]); i++){
     //   HAL_Delay(20);
     //   SCCB_write_reg(OV7670_TestPattern[i][0], OV7670_TestPattern[i][1]);
     // }
-    // for(int i=0; i < sizeof(OV7670_QCIF_UYVY)/sizeof(OV7670_QCIF_UYVY[0]); i++){
-    //   SCCB_read_reg(OV7670_QCIF_UYVY[i][0]);
+    // for(int i=0; i < sizeof(OV5642_Color_Bar)/sizeof(OV5642_Color_Bar[0]); i++){
+    //   SCCB_write_reg(OV5642_Color_Bar[i][0], OV5642_Color_Bar[i][1]);
+    // }
+    SCCB_read_reg(0x300a);
+    SCCB_read_reg(0x300b);
+    SCCB_read_reg(0x4300);  // should be 0x30 for JPEG
+    SCCB_read_reg(0x4713);  // compression mode, should be 0x03
+    SCCB_read_reg(0x3818);  // should be 0xa8 after your write
+    // for(int i=0; i < sizeof(OV5642_JPEG_Capture_QSXGA)/sizeof(OV5642_JPEG_Capture_QSXGA[0]); i++){
+    //   SCCB_read_reg(OV5642_JPEG_Capture_QSXGA[i][0]);
     // }
 
-    HAL_Delay(20);
     printf("Camera Configured\r\nBeginning DCMI Capture\r\n");
 
     __HAL_DCMI_DISABLE_IT(&hdcmi, DCMI_IT_OVR);
-
-    HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)frame_buffer, QCIF_ROWS*QCIF_COLUMNS/2);
-
+    HAL_Delay(500);
+    HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)frame_buffer, 25000);
     while(1){
       
     }
 }
 
-void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi){
-  printf("Frame Captured\r\n");
-  printf("Words Remaining: %d/12672", hdma_dcmi.Instance->CNDTR);
+void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
+{
+    // Scan for 0xFF 0xD9 to find true end
+    uint8_t *buf = (uint8_t*)frame_buffer;
+    for(int i = 0; i < sizeof(frame_buffer) - 1; i++)
+    {
+        if(buf[i] == 0xFF && buf[i+1] == 0xD9)
+        {
+            jpeg_length = i + 2;
+            break;
+        }
+    }
+    capture_done = 1;
 }
 
 void HAL_DCMI_ErrorCallback(DCMI_HandleTypeDef *hdcmi){
   printf("Error");
 }
 
-HAL_StatusTypeDef SCCB_write_reg(uint8_t reg_addr, uint8_t value) {
+HAL_StatusTypeDef SCCB_write_reg(uint16_t reg_addr, uint8_t value) {
 
-  uint8_t data[2];
-  data[0] = reg_addr;
-  data[1] = value;
+  uint8_t data[3];
+  data[0] = (reg_addr>>8) & 0xFF; //high byte of reg addr
+  data[1] = reg_addr & 0xFF; //low byte of reg addr
+  data[2] = value;
 
-  while(HAL_I2C_IsDeviceReady(&hi2c1, OV7670_WRITE_ADDR, 100, 200) != HAL_OK);
-	HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, OV7670_WRITE_ADDR, data, 2, 1000);
+  while(HAL_I2C_IsDeviceReady(&hi2c1, OV5642_WRITE_ADDR, 100, 200) != HAL_OK);
+	HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, OV5642_WRITE_ADDR, data, 3, 1000);
+  HAL_Delay(10);
   // printf("0x%02x -> Reg 0x%02x\r\n", value, reg_addr);
-  HAL_Delay(100);
   return status;
 }
 
-HAL_StatusTypeDef SCCB_read_reg(uint8_t reg_addr){
+uint8_t SCCB_read_reg(uint16_t reg_addr){
   
   uint8_t val;
-  HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, OV7670_WRITE_ADDR, &reg_addr, 1, HAL_MAX_DELAY);
-  status = HAL_I2C_Master_Receive(&hi2c1, OV7670_READ_ADDR, &val, 1, HAL_MAX_DELAY);
+  uint8_t addr[2];
+  addr[0] = (reg_addr >> 8) & 0xFF; //High byte
+  addr[1] = (reg_addr & 0xFF); //low byte
+  HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, OV5642_WRITE_ADDR, addr, 2, HAL_MAX_DELAY);
+  status = HAL_I2C_Master_Receive(&hi2c1, OV5642_READ_ADDR, &val, 1, HAL_MAX_DELAY);
   printf("Received: Reg 0x%02x: 0x%02x\r\n", reg_addr, val);
-  return status;
+  return val;
 }
 
 /**
@@ -131,43 +162,65 @@ void BspCOM_Init(void)
 
 void SystemClock_Config(void)
 {
-  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-  /** Configure the main internal regulator output voltage
-  */
-  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    /* Voltage scaling */
+    if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
+    {
+        Error_Handler();
+    }
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
-  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-  RCC_OscInitStruct.MSICalibrationValue = 0;
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_9;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
+    /* MSI + PLL configuration */
+    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
+    RCC_OscInitStruct.MSIState = RCC_MSI_ON;
+    RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+    /* MSI = 24 MHz */
+    RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_9;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_SYSCLK, RCC_MCODIV_2);
+    /* PLL config */
+    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_MSI;
+
+    /*
+       PLL input  = 24 MHz / 3  = 8 MHz
+       PLL output = 8 MHz * 20 / 2 = 80 MHz
+    */
+    RCC_OscInitStruct.PLL.PLLM = 3;
+    RCC_OscInitStruct.PLL.PLLN = 20;
+    RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
+
+    RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV7;
+    RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
+
+    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    /* Clock tree */
+    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_SYSCLK |
+                                  RCC_CLOCKTYPE_HCLK   |
+                                  RCC_CLOCKTYPE_PCLK1  |
+                                  RCC_CLOCKTYPE_PCLK2;
+
+    /* SYSCLK = PLL = 80 MHz */
+    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+
+    RCC_ClkInitStruct.AHBCLKDivider  = RCC_SYSCLK_DIV1;
+    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
+    /* MCO = MSI = 24 MHz */
+    HAL_RCC_MCOConfig(RCC_MCO1,
+                      RCC_MCO1SOURCE_MSI,
+                      RCC_MCODIV_1);
 }
 
 /**
@@ -192,11 +245,7 @@ static void MX_DCMI_Init(void)
   hdcmi.Init.HSPolarity = DCMI_HSPOLARITY_LOW;
   hdcmi.Init.CaptureRate = DCMI_CR_ALL_FRAME;
   hdcmi.Init.ExtendedDataMode = DCMI_EXTEND_DATA_8B;
-  hdcmi.Init.JPEGMode = DCMI_JPEG_DISABLE;
-  hdcmi.Init.ByteSelectMode = DCMI_BSM_ALL;
-  hdcmi.Init.ByteSelectStart = DCMI_OEBS_ODD;
-  hdcmi.Init.LineSelectMode = DCMI_LSM_ALL;
-  hdcmi.Init.LineSelectStart = DCMI_OELS_ODD;
+  hdcmi.Init.JPEGMode = DCMI_JPEG_ENABLE;
   if (HAL_DCMI_Init(&hdcmi) != HAL_OK)
   {
     Error_Handler();
@@ -223,7 +272,7 @@ static void MX_I2C1_Init(void)
 
   /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x10805D88;
+  hi2c1.Init.Timing = 0x00702991;
   hi2c1.Init.OwnAddress1 = 0;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
