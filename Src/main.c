@@ -23,7 +23,7 @@ static void MX_GPIO_LPUART1_Init(void);
 static void MX_LPUART1_UART_Init(void);
 void BspCOM_Init(void);
 
-uint32_t frame_buffer[25000];
+uint32_t frame_buffer[65535];
 uint8_t capture_done = 0;
 uint32_t jpeg_length = 0;
 
@@ -62,8 +62,8 @@ int main(void){
     for(int i=0; i < sizeof(OV5642_JPEG_Capture_QSXGA)/sizeof(OV5642_JPEG_Capture_QSXGA[0]); i++){
       SCCB_write_reg(OV5642_JPEG_Capture_QSXGA[i][0], OV5642_JPEG_Capture_QSXGA[i][1]);
     }
-    for(int i=0; i < sizeof(ov5642_320x240)/sizeof(ov5642_320x240[0]); i++){
-      SCCB_write_reg(ov5642_320x240[i][0], ov5642_320x240[i][1]);
+    for(int i=0; i < sizeof(ov5642_1024x768)/sizeof(ov5642_1024x768[0]); i++){
+      SCCB_write_reg(ov5642_1024x768[i][0], ov5642_1024x768[i][1]);
     }
     HAL_Delay(100);
     SCCB_write_reg(0x3818, 0xa8);
@@ -88,9 +88,9 @@ int main(void){
 
     printf("Camera Configured\r\nBeginning DCMI Capture\r\n");
 
-    __HAL_DCMI_DISABLE_IT(&hdcmi, DCMI_IT_OVR);
+    // __HAL_DCMI_DISABLE_IT(&hdcmi, DCMI_IT_OVR);
     HAL_Delay(500);
-    HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)frame_buffer, 25000);
+    HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)frame_buffer, 65535);
     while(1){
       
     }
@@ -112,7 +112,9 @@ void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
 }
 
 void HAL_DCMI_ErrorCallback(DCMI_HandleTypeDef *hdcmi){
-  printf("Error");
+    uint32_t error = hdcmi->ErrorCode;
+    
+    printf("DCMI Error Detected! Code: %lu\n", error);
 }
 
 HAL_StatusTypeDef SCCB_write_reg(uint16_t reg_addr, uint8_t value) {
