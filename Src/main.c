@@ -5,26 +5,28 @@
 #include <stdio.h>
 #include <unistd.h> // Required for _write() syscall function
 
-DCMI_HandleTypeDef hdcmi;
-DMA_HandleTypeDef hdma_dcmi;
+DMA_HandleTypeDef hdma_spi1_tx;
+DMA_HandleTypeDef hdma_spi1_rx;
 I2C_HandleTypeDef hi2c1;
-UART_HandleTypeDef hlpuart1;
+SPI_HandleTypeDef hspi2;
+UART_HandleTypeDef huart2;
 
 HAL_StatusTypeDef SCCB_write_reg(uint16_t reg_addr, uint8_t value);
 HAL_StatusTypeDef SCCB_read_reg(uint16_t reg_addr);
+HAL_StatusTypeDef ArduChip_write_reg(uint8_t addr, uint8_t value);
+uint8_t ArduChip_read_reg(uint8_t addr);
+HAL_StatusTypeDef ArduChip_read_fifo(uint8_t length[]);
 
 
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
-static void MX_DCMI_Init(void);
-static void MX_I2C1_Init(void);
-static void MX_GPIO_LPUART1_Init(void);
-static void MX_LPUART1_UART_Init(void);
+static void MX_SPI2_Init(void);
+static void MX_USART2_UART_Init(void);
 void BspCOM_Init(void);
 
-uint32_t frame_buffer[65535];
-uint8_t capture_done = 0;
+uint8_t dataRx[65535];
+uint8_t SPIBusy = 0;
+int capture_done = 0;
 uint32_t jpeg_length = 0;
 
 /* Retarget printf/puts to USART2 (USB VCP) */
@@ -32,7 +34,7 @@ int _write(int file, char *ptr, int len)
 {
   // HAL_UART_Transmit(&hlpuart1, (uint8_t*)ptr, (uint16_t)len, HAL_MAX_DELAY);
     if (file == STDOUT_FILENO || file == STDERR_FILENO) {
-        (void)HAL_UART_Transmit(&hlpuart1, (uint8_t*)ptr, (uint16_t)len, HAL_MAX_DELAY);
+        (void)HAL_UART_Transmit(&huart2, (uint8_t*)ptr, (uint16_t)len, HAL_MAX_DELAY);
         return len;
     }
     return -1;
@@ -48,61 +50,39 @@ int main(void){
     
     /* Initialize all configured peripherals */
     MX_GPIO_Init();
-    MX_DMA_Init();
-    MX_DCMI_Init();
-    MX_I2C1_Init();
+    MX_SPI2_Init();
     BspCOM_Init();
     // Make printf unbuffered so logs appear immediately
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    SCCB_write_reg(0x3008, 0x80); //software reset reg
-    for(int i=0; i < sizeof(OV5642_QVGA_Preview)/sizeof(OV5642_QVGA_Preview[0]); i++){
-      SCCB_write_reg(OV5642_QVGA_Preview[i][0], OV5642_QVGA_Preview[i][1]);
-    }
-    for(int i=0; i < sizeof(OV5642_JPEG_Capture_QSXGA)/sizeof(OV5642_JPEG_Capture_QSXGA[0]); i++){
-      SCCB_write_reg(OV5642_JPEG_Capture_QSXGA[i][0], OV5642_JPEG_Capture_QSXGA[i][1]);
-    }
-    for(int i=0; i < sizeof(ov5642_1024x768)/sizeof(ov5642_1024x768[0]); i++){
-      SCCB_write_reg(ov5642_1024x768[i][0], ov5642_1024x768[i][1]);
-    }
+    char msg[] = "Testing testing";
+    HAL_UART_Transmit(&huart2, (uint8_t*)msg, sizeof(msg)-1, HAL_MAX_DELAY);
+
+    uint8_t dataTx[2];
+    dataTx[0] = 0x00;
+    dataTx[1] = 0x00;
+    uint8_t dataReceive[2] = {0xff};
+    printf("Beginning SPI transmission");
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
     HAL_Delay(100);
-    SCCB_write_reg(0x3818, 0xa8);
-    SCCB_write_reg(0x3621, 0x10);
-    SCCB_write_reg(0x3801, 0xb0);
-    SCCB_write_reg(0x4407, 0x04);
-    // for(int i=0; i < sizeof(OV7670_TestPattern)/sizeof(OV7670_TestPattern[0]); i++){
-    //   HAL_Delay(20);
-    //   SCCB_write_reg(OV7670_TestPattern[i][0], OV7670_TestPattern[i][1]);
-    // }
-    // for(int i=0; i < sizeof(OV5642_Color_Bar)/sizeof(OV5642_Color_Bar[0]); i++){
-    //   SCCB_write_reg(OV5642_Color_Bar[i][0], OV5642_Color_Bar[i][1]);
-    // }
-    SCCB_read_reg(0x300a);
-    SCCB_read_reg(0x300b);
-    SCCB_read_reg(0x4300);  // should be 0x30 for JPEG
-    SCCB_read_reg(0x4713);  // compression mode, should be 0x03
-    SCCB_read_reg(0x3818);  // should be 0xa8 after your write
-    // for(int i=0; i < sizeof(OV5642_JPEG_Capture_QSXGA)/sizeof(OV5642_JPEG_Capture_QSXGA[0]); i++){
-    //   SCCB_read_reg(OV5642_JPEG_Capture_QSXGA[i][0]);
-    // }
+    HAL_StatusTypeDef status = HAL_SPI_TransmitReceive(&hspi2, dataTx, dataReceive, 2, HAL_MAX_DELAY);
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
 
-    printf("Camera Configured\r\nBeginning DCMI Capture\r\n");
+   
 
-    // __HAL_DCMI_DISABLE_IT(&hdcmi, DCMI_IT_OVR);
-    HAL_Delay(500);
-    HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)frame_buffer, 65535);
     while(1){
-      
     }
 }
 
-void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
+void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef * hspi)
 {
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
+    // ArduChip_write_reg(0x04, 0x01);
+    SPIBusy = 0;
     // Scan for 0xFF 0xD9 to find true end
-    uint8_t *buf = (uint8_t*)frame_buffer;
-    for(int i = 0; i < sizeof(frame_buffer) - 1; i++)
+    for(int i = 0; i < sizeof(dataRx) - 1; i++)
     {
-        if(buf[i] == 0xFF && buf[i+1] == 0xD9)
+        if(dataRx[i] == 0xFF && dataRx[i+1] == 0xD9)
         {
             jpeg_length = i + 2;
             break;
@@ -111,10 +91,35 @@ void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
     capture_done = 1;
 }
 
-void HAL_DCMI_ErrorCallback(DCMI_HandleTypeDef *hdcmi){
-    uint32_t error = hdcmi->ErrorCode;
-    
-    printf("DCMI Error Detected! Code: %lu\n", error);
+HAL_StatusTypeDef ArduChip_read_fifo(uint8_t length[]){
+  uint32_t fifo_length = (length[0] << 16) + (length[1] << 8) + length[2] + 1; //Add 1 for dummy byte
+  uint16_t dma_tx_length = (fifo_length < 65535) ? fifo_length : 65535;
+  static uint8_t tx = 0x3C;
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
+  SPIBusy = 1;
+  HAL_SPI_TransmitReceive_DMA(&hspi2, &tx, dataRx, dma_tx_length);
+
+}
+
+HAL_StatusTypeDef ArduChip_write_reg(uint8_t addr, uint8_t value) {
+  uint8_t dataTx[2];
+  dataTx[0] = addr | 0x80;
+  dataTx[1] = value;
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
+  HAL_StatusTypeDef status = HAL_SPI_Transmit(&hspi2, dataTx, 2, HAL_MAX_DELAY);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
+  return status;
+}
+
+uint8_t ArduChip_read_reg(uint8_t addr) {
+  uint8_t dataTx[2];
+  dataTx[0] = addr & ~0x80;
+  dataTx[1] = 0x00;
+  uint8_t dataReceive[2] = {0xff};
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
+  HAL_StatusTypeDef status = HAL_SPI_TransmitReceive(&hspi2, dataTx, dataReceive, 2, HAL_MAX_DELAY);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
+  return dataReceive[1];
 }
 
 HAL_StatusTypeDef SCCB_write_reg(uint16_t reg_addr, uint8_t value) {
@@ -154,8 +159,7 @@ uint8_t SCCB_read_reg(uint16_t reg_addr){
 /* Bring up the board "COM" (USB VCP) so printf uses the on-board USB port */
 void BspCOM_Init(void)
 {
-    MX_GPIO_LPUART1_Init();
-    MX_LPUART1_UART_Init();
+    MX_USART2_UART_Init();
 
     /* Optional: make stdio unbuffered so logs flush immediately */
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -164,162 +168,122 @@ void BspCOM_Init(void)
 
 void SystemClock_Config(void)
 {
-    RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-    RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-    /* Voltage scaling */
-    if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
-    {
-        Error_Handler();
-    }
+  /** Configure the main internal regulator output voltage
+  */
+  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-    /* MSI + PLL configuration */
-    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
-    RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-    RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
+  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
+  RCC_OscInitStruct.MSICalibrationValue = 0;
+  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_9;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_MSI;
+  RCC_OscInitStruct.PLL.PLLM = 3;
+  RCC_OscInitStruct.PLL.PLLN = 20;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV7;
+  RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
+  RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-    /* MSI = 24 MHz */
-    RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_9;
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-    /* PLL config */
-    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_MSI;
-
-    /*
-       PLL input  = 24 MHz / 3  = 8 MHz
-       PLL output = 8 MHz * 20 / 2 = 80 MHz
-    */
-    RCC_OscInitStruct.PLL.PLLM = 3;
-    RCC_OscInitStruct.PLL.PLLN = 20;
-    RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
-
-    RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV7;
-    RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
-
-    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-    {
-        Error_Handler();
-    }
-
-    /* Clock tree */
-    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_SYSCLK |
-                                  RCC_CLOCKTYPE_HCLK   |
-                                  RCC_CLOCKTYPE_PCLK1  |
-                                  RCC_CLOCKTYPE_PCLK2;
-
-    /* SYSCLK = PLL = 80 MHz */
-    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-
-    RCC_ClkInitStruct.AHBCLKDivider  = RCC_SYSCLK_DIV1;
-    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
-
-    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
-    {
-        Error_Handler();
-    }
-
-    /* MCO = MSI = 24 MHz */
-    HAL_RCC_MCOConfig(RCC_MCO1,
-                      RCC_MCO1SOURCE_MSI,
-                      RCC_MCODIV_1);
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /**
-  * @brief DCMI Initialization Function
+  * @brief SPI2 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_DCMI_Init(void)
+static void MX_SPI2_Init(void)
 {
 
-  /* USER CODE BEGIN DCMI_Init 0 */
+  /* USER CODE BEGIN SPI2_Init 0 */
 
-  /* USER CODE END DCMI_Init 0 */
+  /* USER CODE END SPI2_Init 0 */
 
-  /* USER CODE BEGIN DCMI_Init 1 */
+  /* USER CODE BEGIN SPI2_Init 1 */
 
-  /* USER CODE END DCMI_Init 1 */
-  hdcmi.Instance = DCMI;
-  hdcmi.Init.SynchroMode = DCMI_SYNCHRO_HARDWARE;
-  hdcmi.Init.PCKPolarity = DCMI_PCKPOLARITY_RISING;
-  hdcmi.Init.VSPolarity = DCMI_VSPOLARITY_HIGH;
-  hdcmi.Init.HSPolarity = DCMI_HSPOLARITY_LOW;
-  hdcmi.Init.CaptureRate = DCMI_CR_ALL_FRAME;
-  hdcmi.Init.ExtendedDataMode = DCMI_EXTEND_DATA_8B;
-  hdcmi.Init.JPEGMode = DCMI_JPEG_ENABLE;
-  if (HAL_DCMI_Init(&hdcmi) != HAL_OK)
+  /* USER CODE END SPI2_Init 1 */
+  /* SPI2 parameter configuration*/
+  hspi2.Instance = SPI2;
+  hspi2.Init.Mode = SPI_MODE_MASTER;
+  hspi2.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi2.Init.NSS = SPI_NSS_SOFT;
+  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
+  hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi2.Init.CRCPolynomial = 7;
+  hspi2.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
+  hspi2.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
+  if (HAL_SPI_Init(&hspi2) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN DCMI_Init 2 */
+  /* USER CODE BEGIN SPI2_Init 2 */
 
-  /* USER CODE END DCMI_Init 2 */
+  /* USER CODE END SPI2_Init 2 */
 
 }
 
 /**
-  * @brief I2C1 Initialization Function
+  * @brief USART2 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_I2C1_Init(void)
+static void MX_USART2_UART_Init(void)
 {
 
-  /* USER CODE BEGIN I2C1_Init 0 */
+  /* USER CODE BEGIN USART2_Init 0 */
 
-  /* USER CODE END I2C1_Init 0 */
+  /* USER CODE END USART2_Init 0 */
 
-  /* USER CODE BEGIN I2C1_Init 1 */
+  /* USER CODE BEGIN USART2_Init 1 */
 
-  /* USER CODE END I2C1_Init 1 */
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x00702991;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
   {
     Error_Handler();
   }
+  /* USER CODE BEGIN USART2_Init 2 */
 
-  /** Configure Analogue filter
-  */
-  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Digital filter
-  */
-  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C1_Init 2 */
-
-  /* USER CODE END I2C1_Init 2 */
-
-}
-
-/**
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void)
-{
-
-  /* DMA controller clock enable */
-  __HAL_RCC_DMAMUX1_CLK_ENABLE();
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+  /* USER CODE END USART2_Init 2 */
 
 }
 
@@ -331,78 +295,26 @@ static void MX_DMA_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-  /* USER CODE BEGIN MX_GPIO_Init_1 */
-
-  /* USER CODE END MX_GPIO_Init_1 */
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOE_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
-  __HAL_RCC_GPIOG_CLK_ENABLE();
-  HAL_PWREx_EnableVddIO2();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
 
-  /*Configure GPIO pin : PA8 */
-  GPIO_InitStruct.Pin = GPIO_PIN_8;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
+
+  /*Configure GPIO pin : PC6 */
+  GPIO_InitStruct.Pin = GPIO_PIN_6;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF0_MCO;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /* USER CODE BEGIN MX_GPIO_Init_2 */
-
-  /* USER CODE END MX_GPIO_Init_2 */
-}
-
-
-/* LPUART on PG7 (TX) / PG8 (RX) for ST-LINK VCP (same USB used to flash) */
-static void MX_GPIO_LPUART1_Init(void)
-{
-    HAL_PWREx_EnableVddIO2();
-    __HAL_RCC_GPIOG_CLK_ENABLE();
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-    GPIO_InitStruct.Pin       = GPIO_PIN_7 | GPIO_PIN_8; /* PG7 TX, PG8 RX */
-    GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull      = GPIO_NOPULL;
-    GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF8_LPUART1;
-    HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
-}
-
-static void MX_LPUART1_UART_Init(void)
-{
-  __HAL_RCC_LPUART1_CLK_ENABLE();
-  
-  hlpuart1.Instance = LPUART1;
-  hlpuart1.Init.BaudRate = 115200;
-  hlpuart1.Init.WordLength = UART_WORDLENGTH_8B;
-  hlpuart1.Init.StopBits = UART_STOPBITS_1;
-  hlpuart1.Init.Parity = UART_PARITY_NONE;
-  hlpuart1.Init.Mode = UART_MODE_TX_RX;
-  hlpuart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  hlpuart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  hlpuart1.Init.ClockPrescaler = UART_PRESCALER_DIV1;
-  hlpuart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  hlpuart1.FifoMode = UART_FIFOMODE_DISABLE;
-  if (HAL_UART_Init(&hlpuart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_UARTEx_SetTxFifoThreshold(&hlpuart1, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_UARTEx_SetRxFifoThreshold(&hlpuart1, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_UARTEx_DisableFifoMode(&hlpuart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
 }
 
 void Error_Handler(void)
