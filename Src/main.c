@@ -5,8 +5,7 @@
 #include <stdio.h>
 #include <unistd.h> // Required for _write() syscall function
 
-DCMI_HandleTypeDef hdcmi;
-DMA_HandleTypeDef hdma_dcmi;
+
 I2C_HandleTypeDef hi2c1;
 UART_HandleTypeDef hlpuart1;
 
@@ -16,12 +15,11 @@ HAL_StatusTypeDef SCCB_read_reg(uint16_t reg_addr);
 
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
-static void MX_DCMI_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_GPIO_LPUART1_Init(void);
 static void MX_LPUART1_UART_Init(void);
 void BspCOM_Init(void);
+void check_jpeg_length(void);
 
 uint32_t frame_buffer[65535];
 uint8_t capture_done = 0;
@@ -49,7 +47,6 @@ int main(void){
     /* Initialize all configured peripherals */
     MX_GPIO_Init();
     MX_DMA_Init();
-    MX_DCMI_Init();
     MX_I2C1_Init();
     BspCOM_Init();
     // Make printf unbuffered so logs appear immediately
@@ -70,33 +67,23 @@ int main(void){
     SCCB_write_reg(0x3621, 0x10);
     SCCB_write_reg(0x3801, 0xb0);
     SCCB_write_reg(0x4407, 0x04);
-    // for(int i=0; i < sizeof(OV7670_TestPattern)/sizeof(OV7670_TestPattern[0]); i++){
-    //   HAL_Delay(20);
-    //   SCCB_write_reg(OV7670_TestPattern[i][0], OV7670_TestPattern[i][1]);
-    // }
-    // for(int i=0; i < sizeof(OV5642_Color_Bar)/sizeof(OV5642_Color_Bar[0]); i++){
-    //   SCCB_write_reg(OV5642_Color_Bar[i][0], OV5642_Color_Bar[i][1]);
-    // }
+    
     SCCB_read_reg(0x300a);
     SCCB_read_reg(0x300b);
     SCCB_read_reg(0x4300);  // should be 0x30 for JPEG
     SCCB_read_reg(0x4713);  // compression mode, should be 0x03
     SCCB_read_reg(0x3818);  // should be 0xa8 after your write
-    // for(int i=0; i < sizeof(OV5642_JPEG_Capture_QSXGA)/sizeof(OV5642_JPEG_Capture_QSXGA[0]); i++){
-    //   SCCB_read_reg(OV5642_JPEG_Capture_QSXGA[i][0]);
-    // }
 
     printf("Camera Configured\r\nBeginning DCMI Capture\r\n");
 
     // __HAL_DCMI_DISABLE_IT(&hdcmi, DCMI_IT_OVR);
     HAL_Delay(500);
-    HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)frame_buffer, 65535);
     while(1){
       
     }
 }
 
-void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
+void get_jpeg_lenbgth()
 {
     // Scan for 0xFF 0xD9 to find true end
     uint8_t *buf = (uint8_t*)frame_buffer;
@@ -111,25 +98,7 @@ void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
     capture_done = 1;
 }
 
-void HAL_DCMI_ErrorCallback(DCMI_HandleTypeDef *hdcmi){
-    uint32_t error = hdcmi->ErrorCode;
-    
-    printf("DCMI Error Detected! Code: %lu\n", error);
-}
 
-HAL_StatusTypeDef SCCB_write_reg(uint16_t reg_addr, uint8_t value) {
-
-  uint8_t data[3];
-  data[0] = (reg_addr>>8) & 0xFF; //high byte of reg addr
-  data[1] = reg_addr & 0xFF; //low byte of reg addr
-  data[2] = value;
-
-  while(HAL_I2C_IsDeviceReady(&hi2c1, OV5642_WRITE_ADDR, 100, 200) != HAL_OK);
-	HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, OV5642_WRITE_ADDR, data, 3, 1000);
-  HAL_Delay(10);
-  // printf("0x%02x -> Reg 0x%02x\r\n", value, reg_addr);
-  return status;
-}
 
 uint8_t SCCB_read_reg(uint16_t reg_addr){
   
@@ -225,38 +194,6 @@ void SystemClock_Config(void)
                       RCC_MCODIV_1);
 }
 
-/**
-  * @brief DCMI Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_DCMI_Init(void)
-{
-
-  /* USER CODE BEGIN DCMI_Init 0 */
-
-  /* USER CODE END DCMI_Init 0 */
-
-  /* USER CODE BEGIN DCMI_Init 1 */
-
-  /* USER CODE END DCMI_Init 1 */
-  hdcmi.Instance = DCMI;
-  hdcmi.Init.SynchroMode = DCMI_SYNCHRO_HARDWARE;
-  hdcmi.Init.PCKPolarity = DCMI_PCKPOLARITY_RISING;
-  hdcmi.Init.VSPolarity = DCMI_VSPOLARITY_HIGH;
-  hdcmi.Init.HSPolarity = DCMI_HSPOLARITY_LOW;
-  hdcmi.Init.CaptureRate = DCMI_CR_ALL_FRAME;
-  hdcmi.Init.ExtendedDataMode = DCMI_EXTEND_DATA_8B;
-  hdcmi.Init.JPEGMode = DCMI_JPEG_ENABLE;
-  if (HAL_DCMI_Init(&hdcmi) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN DCMI_Init 2 */
-
-  /* USER CODE END DCMI_Init 2 */
-
-}
 
 /**
   * @brief I2C1 Initialization Function
@@ -331,46 +268,9 @@ static void MX_DMA_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-  /* USER CODE BEGIN MX_GPIO_Init_1 */
-
-  /* USER CODE END MX_GPIO_Init_1 */
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOE_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
-  __HAL_RCC_GPIOG_CLK_ENABLE();
-  HAL_PWREx_EnableVddIO2();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-
-  /*Configure GPIO pin : PA8 */
-  GPIO_InitStruct.Pin = GPIO_PIN_8;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF0_MCO;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /* USER CODE BEGIN MX_GPIO_Init_2 */
-
-  /* USER CODE END MX_GPIO_Init_2 */
+  
 }
 
-
-/* LPUART on PG7 (TX) / PG8 (RX) for ST-LINK VCP (same USB used to flash) */
-static void MX_GPIO_LPUART1_Init(void)
-{
-    HAL_PWREx_EnableVddIO2();
-    __HAL_RCC_GPIOG_CLK_ENABLE();
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-    GPIO_InitStruct.Pin       = GPIO_PIN_7 | GPIO_PIN_8; /* PG7 TX, PG8 RX */
-    GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull      = GPIO_NOPULL;
-    GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF8_LPUART1;
-    HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
-}
 
 static void MX_LPUART1_UART_Init(void)
 {
