@@ -99,15 +99,17 @@ int main(void){
     // }
 
     uint8_t spi_conn = 0;
-    ArduChip_write_reg(0x00, 0x50);
+    ArduChip_write_reg(0x00, 0x55);
 
     uint8_t dataRx[2] = {0x3E, 0x3E};
-    uint8_t dataTx[2] = {0x50, 0x00};
+    uint8_t dataTx[2] = {0x00 | 0x80, 0x00};
 
     while(!spi_conn){
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
       HAL_SPI_TransmitReceive(&hspi1, dataTx, dataRx, 2, HAL_MAX_DELAY);
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
       dataRx[1];
-      spi_conn = dataRx[1] == 0x50;
+      spi_conn = dataRx[1] == 0x55;
     }
 
     
@@ -135,7 +137,7 @@ void get_jpeg_lenbgth()
 }
 
 void ArduChip_write_reg(uint8_t reg_addr, uint8_t value){
-  uint8_t data[2] = {reg_addr, value};
+  uint8_t data[2] = {reg_addr | 0x80, value};
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
   HAL_SPI_Transmit(&hspi1, data, 2, HAL_MAX_DELAY);
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
