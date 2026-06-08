@@ -6,18 +6,24 @@
 #include <unistd.h> // Required for _write() syscall function
 
 
+SPI_HandleTypeDef hspi1;
 I2C_HandleTypeDef hi2c1;
 UART_HandleTypeDef hlpuart1;
+DMA_HandleTypeDef hdma_spi1_tx;
+DMA_HandleTypeDef hdma_spi1_rx;
 
 HAL_StatusTypeDef SCCB_write_reg(uint16_t reg_addr, uint8_t value);
 HAL_StatusTypeDef SCCB_read_reg(uint16_t reg_addr);
+void ArduChip_write_reg(uint8_t reg_addr, uint8_t val);
 
 
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
-static void MX_GPIO_LPUART1_Init(void);
+static void MX_SPI1_Init(void);
 static void MX_LPUART1_UART_Init(void);
+
 void BspCOM_Init(void);
 void check_jpeg_length(void);
 
@@ -48,33 +54,63 @@ int main(void){
     MX_GPIO_Init();
     MX_DMA_Init();
     MX_I2C1_Init();
+    MX_SPI1_Init();
+    MX_LPUART1_UART_Init();
+
     BspCOM_Init();
     // Make printf unbuffered so logs appear immediately
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    SCCB_write_reg(0x3008, 0x80); //software reset reg
-    for(int i=0; i < sizeof(OV5642_QVGA_Preview)/sizeof(OV5642_QVGA_Preview[0]); i++){
-      SCCB_write_reg(OV5642_QVGA_Preview[i][0], OV5642_QVGA_Preview[i][1]);
-    }
-    for(int i=0; i < sizeof(OV5642_JPEG_Capture_QSXGA)/sizeof(OV5642_JPEG_Capture_QSXGA[0]); i++){
-      SCCB_write_reg(OV5642_JPEG_Capture_QSXGA[i][0], OV5642_JPEG_Capture_QSXGA[i][1]);
-    }
-    for(int i=0; i < sizeof(ov5642_1024x768)/sizeof(ov5642_1024x768[0]); i++){
-      SCCB_write_reg(ov5642_1024x768[i][0], ov5642_1024x768[i][1]);
-    }
-    HAL_Delay(100);
-    SCCB_write_reg(0x3818, 0xa8);
-    SCCB_write_reg(0x3621, 0x10);
-    SCCB_write_reg(0x3801, 0xb0);
-    SCCB_write_reg(0x4407, 0x04);
+    // SCCB_write_reg(0x3008, 0x80); //software reset reg
+    // for(int i=0; i < sizeof(OV5642_QVGA_Preview)/sizeof(OV5642_QVGA_Preview[0]); i++){
+    //   SCCB_write_reg(OV5642_QVGA_Preview[i][0], OV5642_QVGA_Preview[i][1]);
+    // }
+    // for(int i=0; i < sizeof(OV5642_JPEG_Capture_QSXGA)/sizeof(OV5642_JPEG_Capture_QSXGA[0]); i++){
+    //   SCCB_write_reg(OV5642_JPEG_Capture_QSXGA[i][0], OV5642_JPEG_Capture_QSXGA[i][1]);
+    // }
+    // for(int i=0; i < sizeof(ov5642_1024x768)/sizeof(ov5642_1024x768[0]); i++){
+    //   SCCB_write_reg(ov5642_1024x768[i][0], ov5642_1024x768[i][1]);
+    // }
+    // HAL_Delay(100);
+    // SCCB_write_reg(0x3818, 0xa8);
+    // SCCB_write_reg(0x3621, 0x10);
+    // SCCB_write_reg(0x3801, 0xb0);
+    // SCCB_write_reg(0x4407, 0x04);
     
-    SCCB_read_reg(0x300a);
-    SCCB_read_reg(0x300b);
-    SCCB_read_reg(0x4300);  // should be 0x30 for JPEG
-    SCCB_read_reg(0x4713);  // compression mode, should be 0x03
-    SCCB_read_reg(0x3818);  // should be 0xa8 after your write
+    // SCCB_read_reg(0x300a);
+    // SCCB_read_reg(0x300b);
+    // SCCB_read_reg(0x4300);  // should be 0x30 for JPEG
+    // SCCB_read_reg(0x4713);  // compression mode, should be 0x03
+    // SCCB_read_reg(0x3818);  // should be 0xa8 after your write
 
-    printf("Camera Configured\r\nBeginning DCMI Capture\r\n");
+    HAL_Delay(500);
+
+    //Reset CPLD 
+    ArduChip_write_reg(0x07, 0x80); 
+    ArduChip_write_reg(0x07, 0x00); 
+    // SCCB_write_reg(0x3008, 0x80); //software reset reg 
+    // for(int i=0; i < sizeof(OV5642_QVGA_Preview)/sizeof(OV5642_QVGA_Preview[0]); i++){
+    //   SCCB_write_reg(OV5642_QVGA_Preview[i][0], OV5642_QVGA_Preview[i][1]); 
+    // } 
+    // for(int i=0; i < sizeof(OV5642_JPEG_Capture_QSXGA)/sizeof(OV5642_JPEG_Capture_QSXGA[0]); i++){ 
+    //   SCCB_write_reg(OV5642_JPEG_Capture_QSXGA[i][0], OV5642_JPEG_Capture_QSXGA[i][1]); 
+    // } for(int i=0; i < sizeof(ov5642_1024x768)/sizeof(ov5642_1024x768[0]); i++){ 
+    //   SCCB_write_reg(ov5642_1024x768[i][0], ov5642_1024x768[i][1]); 
+    // }
+
+    uint8_t spi_conn = 0;
+    ArduChip_write_reg(0x00, 0x50);
+
+    uint8_t dataRx[2] = {0x3E, 0x3E};
+    uint8_t dataTx[2] = {0x50, 0x00};
+
+    while(!spi_conn){
+      HAL_SPI_TransmitReceive(&hspi1, dataTx, dataRx, 2, HAL_MAX_DELAY);
+      dataRx[1];
+      spi_conn = dataRx[1] == 0x50;
+    }
+
+    
 
     // __HAL_DCMI_DISABLE_IT(&hdcmi, DCMI_IT_OVR);
     HAL_Delay(500);
@@ -96,6 +132,27 @@ void get_jpeg_lenbgth()
         }
     }
     capture_done = 1;
+}
+
+void ArduChip_write_reg(uint8_t reg_addr, uint8_t value){
+  uint8_t data[2] = {reg_addr, value};
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
+  HAL_SPI_Transmit(&hspi1, data, 2, HAL_MAX_DELAY);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
+}
+
+HAL_StatusTypeDef SCCB_write_reg(uint16_t reg_addr, uint8_t value) {
+
+  uint8_t data[3];
+  data[0] = (reg_addr>>8) & 0xFF; //high byte of reg addr
+  data[1] = reg_addr & 0xFF; //low byte of reg addr
+  data[2] = value;
+
+  while(HAL_I2C_IsDeviceReady(&hi2c1, OV5642_WRITE_ADDR, 100, 200) != HAL_OK);
+	HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, OV5642_WRITE_ADDR, data, 3, 1000);
+  HAL_Delay(10);
+  // printf("0x%02x -> Reg 0x%02x\r\n", value, reg_addr);
+  return status;
 }
 
 
@@ -123,9 +180,6 @@ uint8_t SCCB_read_reg(uint16_t reg_addr){
 /* Bring up the board "COM" (USB VCP) so printf uses the on-board USB port */
 void BspCOM_Init(void)
 {
-    MX_GPIO_LPUART1_Init();
-    MX_LPUART1_UART_Init();
-
     /* Optional: make stdio unbuffered so logs flush immediately */
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
@@ -187,11 +241,6 @@ void SystemClock_Config(void)
     {
         Error_Handler();
     }
-
-    /* MCO = MSI = 24 MHz */
-    HAL_RCC_MCOConfig(RCC_MCO1,
-                      RCC_MCO1SOURCE_MSI,
-                      RCC_MCODIV_1);
 }
 
 
@@ -244,38 +293,60 @@ static void MX_I2C1_Init(void)
 }
 
 /**
-  * Enable DMA controller clock
+  * @brief SPI1 Initialization Function
+  * @param None
+  * @retval None
   */
-static void MX_DMA_Init(void)
+static void MX_SPI1_Init(void)
 {
 
-  /* DMA controller clock enable */
-  __HAL_RCC_DMAMUX1_CLK_ENABLE();
-  __HAL_RCC_DMA1_CLK_ENABLE();
+  /* USER CODE BEGIN SPI1_Init 0 */
 
-  /* DMA interrupt init */
-  /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+  /* USER CODE END SPI1_Init 0 */
+
+  /* USER CODE BEGIN SPI1_Init 1 */
+
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 7;
+  hspi1.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
+  hspi1.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI1_Init 2 */
+
+  /* USER CODE END SPI1_Init 2 */
 
 }
 
 /**
-  * @brief GPIO Initialization Function
+  * @brief LPUART1 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-  
-}
-
-
 static void MX_LPUART1_UART_Init(void)
 {
-  __HAL_RCC_LPUART1_CLK_ENABLE();
-  
+
+  /* USER CODE BEGIN LPUART1_Init 0 */
+
+  /* USER CODE END LPUART1_Init 0 */
+
+  /* USER CODE BEGIN LPUART1_Init 1 */
+
+  /* USER CODE END LPUART1_Init 1 */
   hlpuart1.Instance = LPUART1;
   hlpuart1.Init.BaudRate = 115200;
   hlpuart1.Init.WordLength = UART_WORDLENGTH_8B;
@@ -303,7 +374,63 @@ static void MX_LPUART1_UART_Init(void)
   {
     Error_Handler();
   }
+  /* USER CODE BEGIN LPUART1_Init 2 */
+
+  /* USER CODE END LPUART1_Init 2 */
+
 }
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMAMUX1_CLK_ENABLE();
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+
+  HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+
+}
+
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOG_CLK_ENABLE();
+  HAL_PWREx_EnableVddIO2();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
+
+  /*Configure GPIO pin : PC6 */
+  GPIO_InitStruct.Pin = GPIO_PIN_6;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
+}
+
 
 void Error_Handler(void)
 {
