@@ -13,8 +13,10 @@ DMA_HandleTypeDef hdma_spi1_tx;
 DMA_HandleTypeDef hdma_spi1_rx;
 
 HAL_StatusTypeDef SCCB_write_reg(uint16_t reg_addr, uint8_t value);
-HAL_StatusTypeDef SCCB_read_reg(uint16_t reg_addr);
+uint8_t SCCB_read_reg(uint16_t reg_addr);
 void ArduChip_write_reg(uint8_t reg_addr, uint8_t val);
+uint8_t ArduChip_read_reg(uint8_t reg_addr);
+void ArduChip_read_fifo(uint32_t length);
 
 
 void SystemClock_Config(void);
@@ -25,11 +27,11 @@ static void MX_SPI1_Init(void);
 static void MX_LPUART1_UART_Init(void);
 
 void BspCOM_Init(void);
-void check_jpeg_length(void);
 
-uint32_t frame_buffer[65535];
-uint8_t capture_done = 0;
+
+uint8_t frame_buffer[65535] = {0};
 uint32_t jpeg_length = 0;
+volatile uint8_t capture_done = 0;
 
 /* Retarget printf/puts to USART2 (USB VCP) */
 int _write(int file, char *ptr, int len)
@@ -61,42 +63,12 @@ int main(void){
     // Make printf unbuffered so logs appear immediately
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    // SCCB_write_reg(0x3008, 0x80); //software reset reg
-    // for(int i=0; i < sizeof(OV5642_QVGA_Preview)/sizeof(OV5642_QVGA_Preview[0]); i++){
-    //   SCCB_write_reg(OV5642_QVGA_Preview[i][0], OV5642_QVGA_Preview[i][1]);
-    // }
-    // for(int i=0; i < sizeof(OV5642_JPEG_Capture_QSXGA)/sizeof(OV5642_JPEG_Capture_QSXGA[0]); i++){
-    //   SCCB_write_reg(OV5642_JPEG_Capture_QSXGA[i][0], OV5642_JPEG_Capture_QSXGA[i][1]);
-    // }
-    // for(int i=0; i < sizeof(ov5642_1024x768)/sizeof(ov5642_1024x768[0]); i++){
-    //   SCCB_write_reg(ov5642_1024x768[i][0], ov5642_1024x768[i][1]);
-    // }
-    // HAL_Delay(100);
-    // SCCB_write_reg(0x3818, 0xa8);
-    // SCCB_write_reg(0x3621, 0x10);
-    // SCCB_write_reg(0x3801, 0xb0);
-    // SCCB_write_reg(0x4407, 0x04);
-    
-    // SCCB_read_reg(0x300a);
-    // SCCB_read_reg(0x300b);
-    // SCCB_read_reg(0x4300);  // should be 0x30 for JPEG
-    // SCCB_read_reg(0x4713);  // compression mode, should be 0x03
-    // SCCB_read_reg(0x3818);  // should be 0xa8 after your write
 
     HAL_Delay(500);
 
     //Reset CPLD 
     ArduChip_write_reg(0x07, 0x80); 
     ArduChip_write_reg(0x07, 0x00); 
-    // SCCB_write_reg(0x3008, 0x80); //software reset reg 
-    // for(int i=0; i < sizeof(OV5642_QVGA_Preview)/sizeof(OV5642_QVGA_Preview[0]); i++){
-    //   SCCB_write_reg(OV5642_QVGA_Preview[i][0], OV5642_QVGA_Preview[i][1]); 
-    // } 
-    // for(int i=0; i < sizeof(OV5642_JPEG_Capture_QSXGA)/sizeof(OV5642_JPEG_Capture_QSXGA[0]); i++){ 
-    //   SCCB_write_reg(OV5642_JPEG_Capture_QSXGA[i][0], OV5642_JPEG_Capture_QSXGA[i][1]); 
-    // } for(int i=0; i < sizeof(ov5642_1024x768)/sizeof(ov5642_1024x768[0]); i++){ 
-    //   SCCB_write_reg(ov5642_1024x768[i][0], ov5642_1024x768[i][1]); 
-    // }
 
     uint8_t spi_conn = 0;
     ArduChip_write_reg(0x00, 0x55);
@@ -105,42 +77,122 @@ int main(void){
     uint8_t dataTx[2] = {0x00 | 0x80, 0x00};
 
     while(!spi_conn){
-      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
-      HAL_SPI_TransmitReceive(&hspi1, dataTx, dataRx, 2, HAL_MAX_DELAY);
-      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
-      dataRx[1];
-      spi_conn = dataRx[1] == 0x55;
+      uint8_t data = ArduChip_read_reg(0x00);
+      spi_conn = data == 0x55;
     }
 
-    
+    printf("SPI Connection Tested and Valid\r\n");
 
-    // __HAL_DCMI_DISABLE_IT(&hdcmi, DCMI_IT_OVR);
+    uint8_t id_high = 0;
+    uint8_t id_low = 0;
+    while((id_high != 0x56) || (id_low != 0x42)){
+      id_high = SCCB_read_reg(0x300A);
+      id_low = SCCB_read_reg(0x300B);
+    }
+
+    printf("I2C Connection Tested and Valid\r\n");
+
+    SCCB_write_reg(0x3008, 0x80); //ov5642 reset reg 
+
+    for(int i=0; i < sizeof(OV5642_QVGA_Preview)/sizeof(OV5642_QVGA_Preview[0]); i++){
+      SCCB_write_reg(OV5642_QVGA_Preview[i][0], OV5642_QVGA_Preview[i][1]);
+    }
+    HAL_Delay(100);
+    HAL_Delay(100);
+    for(int i=0; i < sizeof(OV5642_JPEG_Capture_QSXGA)/sizeof(OV5642_JPEG_Capture_QSXGA[0]); i++){
+      SCCB_write_reg(OV5642_JPEG_Capture_QSXGA[i][0], OV5642_JPEG_Capture_QSXGA[i][1]);
+    }
+    for(int i=0; i < sizeof(ov5642_640x480)/sizeof(ov5642_640x480[0]); i++){
+      SCCB_write_reg(ov5642_640x480[i][0], ov5642_640x480[i][1]);
+    }
+    HAL_Delay(100);
+    SCCB_write_reg(0x3818, 0xa8);
+    SCCB_write_reg(0x3621, 0x10);
+    SCCB_write_reg(0x3801, 0xb0);
+    SCCB_write_reg(0x4407, 0x08);
+    SCCB_write_reg(0x5888, 0x00);
+    SCCB_write_reg(0x5000, 0xFF);
+
+    HAL_Delay(100);
+    printf("Camera Configured\r\n");
+
+    printf("Transmitting Read Command over SPI...\r\n");
+
+    ArduChip_write_reg(0x03, 0x02); //Set VSync High
+    ArduChip_write_reg(0x04, 0x01); //Clear FIFO
+    ArduChip_write_reg(0x01, 0x00); //Set to capture 1 frame
+
+    // //Delay for camera configs to sync
+    HAL_Delay(500);
+    ArduChip_write_reg(0x04, 0x02); //Start capture
+    uint8_t done = ArduChip_read_reg(0x41) & 0b00001000; //Is capture done?
+    while(!done){
+      done = ArduChip_read_reg(0x41) & 0b00001000; //Is capture done?
+    }
+
+    // //Get FIFO length
+    uint8_t length[3];
+    length[2] = ArduChip_read_reg(0x42);
+    length[1] = ArduChip_read_reg(0x43);
+    length[0] = ArduChip_read_reg(0x44);
+
+    uint32_t fifo_length = (length[2] << 0) + (length[1] << 8) + (length[0] << 16);
+
+    ArduChip_read_fifo(fifo_length);
+
+    //FIFO Uses DMA so asnyc. Can do other stuff here later on...
+    while(!capture_done);
+
+    ArduChip_write_reg(0x04, 0x01); //Clear FIFO flag
+    
     HAL_Delay(500);
     while(1){
       
     }
 }
 
-void get_jpeg_lenbgth()
+void ArduChip_read_fifo(uint32_t length)
 {
-    // Scan for 0xFF 0xD9 to find true end
-    uint8_t *buf = (uint8_t*)frame_buffer;
-    for(int i = 0; i < sizeof(frame_buffer) - 1; i++)
-    {
-        if(buf[i] == 0xFF && buf[i+1] == 0xD9)
-        {
-            jpeg_length = i + 2;
-            break;
-        }
-    }
-    capture_done = 1;
+  uint8_t dataTx = 0x3C;
+
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
+  HAL_StatusTypeDef status = HAL_SPI_TransmitReceive_DMA(&hspi1, &dataTx, frame_buffer, length);
+
 }
+
+void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
+{
+    if(hspi == &hspi1)
+    {
+      
+      HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
+      for(int i = 0; i < 65535 - 1; i++)
+      {
+          if(frame_buffer[i] == 0xFF && frame_buffer[i+1] == 0xD9)
+          {
+              jpeg_length = i + 2;
+              capture_done = 1;
+              break;
+          }
+      }
+  }
+}
+
 
 void ArduChip_write_reg(uint8_t reg_addr, uint8_t value){
   uint8_t data[2] = {reg_addr | 0x80, value};
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
   HAL_SPI_Transmit(&hspi1, data, 2, HAL_MAX_DELAY);
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
+}
+
+uint8_t ArduChip_read_reg(uint8_t reg_addr){
+  uint8_t data[2] = {reg_addr, 0x00};
+  uint8_t dataRx[2] = {0x33, 0x33};
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
+  HAL_SPI_TransmitReceive(&hspi1, data, dataRx, 2, HAL_MAX_DELAY);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
+  return dataRx[1];
 }
 
 HAL_StatusTypeDef SCCB_write_reg(uint16_t reg_addr, uint8_t value) {
