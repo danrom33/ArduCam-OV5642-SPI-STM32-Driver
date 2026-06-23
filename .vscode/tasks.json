@@ -6,7 +6,7 @@
     {
       "label": "Generate build system",
       "type": "shell",
-      "command": "cmake -G 'MinGW Makefiles' -B 'build' ./ -DCMAKE_TOOLCHAIN_FILE='CMake/arm-none-eabi.cmake' -DCMAKE_BUILD_TYPE=debug",
+      "command": "cmake -G 'Ninja' -B 'build' ./ -DCMAKE_TOOLCHAIN_FILE='CMake/arm-none-eabi.cmake' -DCMAKE_BUILD_TYPE=Debug",
     },
     {
       "label": "Build Project",

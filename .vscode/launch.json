@@ -12,7 +12,7 @@
 // 			"request": "launch",
 // 			"type": "cortex-debug",
 // 			"runToEntryPoint": "main",
-// 			"showDevDebugOutput": "none",
+// 			"showDevDebugOutput": "raw",
 // 			"servertype": "stlink",
 // 			"device": "STM32L4XX",
 // 			"svdFile": "STM32L4R5.svd"
@@ -35,7 +35,7 @@
             "device": "STM32L4R5",
 
             "configFiles": [
-                "interface/stlink.cfg",
+                "interface/stlink-v2.cfg",
                 "target/stm32l4x.cfg"
             ],
 
@@ -43,8 +43,6 @@
             "showDevDebugOutput": "none",
 
             "svdFile": "STM32L4R5.svd",
-
-            "openOCDPath": "C:/Users/danro/Program Files/OpenOCD-20260302-0.12.0/bin/openocd.exe"
         }
     ]
 }

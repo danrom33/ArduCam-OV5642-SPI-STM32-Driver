@@ -1,7 +1,7 @@
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR arm)
 
-set(ARM_TOOLCHAIN_DIR "C:/Users/danro/Program Files/GNU ARM Embedded Toolchain/bin")
+set(ARM_TOOLCHAIN_DIR "C:/Program Files/Arm/GNU Toolchain mingw-w64-x86_64-arm-none-eabi/bin")
 set(BINUTILS_PATH ${ARM_TOOLCHAIN_DIR})
 
 set(TOOLCHAIN_PREFIX ${ARM_TOOLCHAIN_DIR}/arm-none-eabi-)
