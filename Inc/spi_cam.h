@@ -10,7 +10,7 @@ extern "C" {
 typedef struct {
     I2C_HandleTypeDef *hi2c;
     SPI_HandleTypeDef *hspi;
-    GPIO_TypeDef* cs_gpio_port;
+    GPIO_TypeDef *cs_gpio_port;
     uint16_t cs_gpio_pin;
 } OV5642_HandleTypeDef;
 

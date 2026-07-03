@@ -1,8 +1,9 @@
 #include "sccb.h"
+#include "camera_config.h"
 
 extern OV5642_HandleTypeDef hov5642;
 
-OV5642_StatusTypeDef SCCB_write_reg(I2C_HandleTypeDef *hi2c, uint16_t reg_addr, uint8_t value) {
+OV5642_StatusTypeDef SCCB_write_reg(uint16_t reg_addr, uint8_t value) {
 
   uint8_t data[3];
   data[0] = (reg_addr>>8) & 0xFF; //high byte of reg addr
@@ -24,7 +25,7 @@ OV5642_StatusTypeDef SCCB_write_reg(I2C_HandleTypeDef *hi2c, uint16_t reg_addr, 
 
 
 
-OV5642_StatusTypeDef SCCB_read_reg(I2C_HandleTypeDef *hi2c, uint16_t reg_addr, uint8_t *val){
+OV5642_StatusTypeDef SCCB_read_reg(uint16_t reg_addr, uint8_t *val){
   uint8_t addr[2];
   addr[0] = (reg_addr >> 8) & 0xFF; //High byte
   addr[1] = (reg_addr & 0xFF); //low byte

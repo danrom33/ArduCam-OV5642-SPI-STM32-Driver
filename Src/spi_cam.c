@@ -106,7 +106,7 @@ int take_picture(void){
     }
 }
 
-HAL_StatusTypeDef OV5642_Init(I2C_HandleTypeDef *hi2c, SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_gpio_port, uint16_t *cs_gpio_pin){
+HAL_StatusTypeDef OV5642_Init(I2C_HandleTypeDef *hi2c, SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_gpio_port, uint16_t cs_gpio_pin){
   hov5642.hi2c = hi2c;
   hov5642.hspi = hspi;
   hov5642.cs_gpio_port = cs_gpio_port;
