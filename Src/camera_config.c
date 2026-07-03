@@ -1,4 +1,5 @@
 #include "camera_config.h"
+#include <stdint.h>
 
 const uint16_t OV5642_YUV422[][2] = 
 {

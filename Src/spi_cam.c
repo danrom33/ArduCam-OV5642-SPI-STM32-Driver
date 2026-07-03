@@ -4,7 +4,7 @@
 #include "arduchip.h"
 
 
-static OV5642_HandleTypeDef hov5642;
+OV5642_HandleTypeDef hov5642;
 
 uint8_t frame_buffer[65535] = {0};
 uint32_t jpeg_length = 0;
