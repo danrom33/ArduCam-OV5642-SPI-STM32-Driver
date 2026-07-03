@@ -27,8 +27,8 @@ int take_picture(void){
     uint8_t dataTx[2] = {0x00 | 0x80, 0x00};
 
     while(!spi_conn){
-      uint8_t data = ArduChip_read_reg(0x00);
-      spi_conn = data == 0x55;
+      ArduChip_read_reg(0x00, reg_val);
+      spi_conn = reg_val == 0x55;
     }
 
     // printf("SPI Connection Tested and Valid\r\n");
@@ -36,8 +36,10 @@ int take_picture(void){
     uint8_t id_high = 0;
     uint8_t id_low = 0;
     while((id_high != 0x56) || (id_low != 0x42)){
-      id_high = SCCB_read_reg(0x300A);
-      id_low = SCCB_read_reg(0x300B);
+      SCCB_read_reg(0x300A, reg_val);
+      id_high = reg_val;
+      SCCB_read_reg(0x300B, reg_val);
+      id_low = reg_val;
     }
 
     // printf("I2C Connection Tested and Valid\r\n");
