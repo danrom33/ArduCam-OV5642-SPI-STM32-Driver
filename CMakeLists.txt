@@ -1,37 +1,18 @@
-cmake_minimum_required(VERSION 3.16)
-project(IridiumProject)
-
-enable_language(C CXX ASM)
-
-# set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-#Include file specifying startup and linker script
-include(${CMAKE_SOURCE_DIR}/CMake/scripts.cmake)
-#Include file specifying CPU compile options
-include(${CMAKE_SOURCE_DIR}/CMake/mcu.cmake)
+cmake_minimum_required(VERSION 3.10)
+project(STM32)
 
 
-add_compile_options(${CPU_COMPILE_OPTIONS})
+# Collect all .c source files in Core/Sr
+file(GLOB SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/Src/*.c")
 
-add_link_options(
-    ${CPU_COMPILE_OPTIONS}
-    --specs=nano.specs
-	-T${LINKER_SCRIPT}
-
-	LINKER:--start-group
-	-lc
-	-lm
-	# -lnosys
-	LINKER:--end-group
-	LINKER:--gc-sections
-	LINKER:--print-memory-usage
+# Add the executable using SRC files
+add_library(SPI_CAM 
+    ${SRC_FILES}
 )
 
-# Source directories
-set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/Src)
+# Include headers
+target_include_directories(SPI_CAM 
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Inc"
+)
 
-include_directories( ${CMAKE_CURRENT_SOURCE_DIR}/Inc)
-
-include(${CMAKE_CURRENT_SOURCE_DIR}/CMake/stm32cubel4.cmake)
-
-add_subdirectory(${SRC_DIR})
+# target_link_libraries(MAIN PUBLIC STM32CUBEL4_HAL)
