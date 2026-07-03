@@ -1,6 +1,8 @@
 #ifndef CAMERA_CONFIG_H
 #define CAMERA_CONFIG_H
 
+#include <stdint.h>
+
 #define OV5642_WRITE_ADDR 0x78
 #define OV5642_READ_ADDR 0x79
 
