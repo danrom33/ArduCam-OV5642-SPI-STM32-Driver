@@ -33,6 +33,8 @@ OV5642_StatusTypeDef ArduChip_read_reg(uint8_t reg_addr, uint8_t *val){
 
 OV5642_StatusTypeDef ArduChip_read_fifo(uint32_t length)
 {
+  uint8_t dataTx = 0x3C;
+
   CS_Select();
   HAL_StatusTypeDef status = HAL_SPI_TransmitReceive_DMA(hov5642.hspi, &dataTx, frame_buffer, length);
   return OV5642_OK;
