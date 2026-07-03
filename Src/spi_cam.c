@@ -45,17 +45,22 @@ OV5642_StatusTypeDef OV5642_Take_Picture(void){
     // printf("I2C Connection Tested and Valid\r\n");
 
     SCCB_write_reg(0x3008, 0x80); //ov5642 reset reg 
-
-    for(int i=0; i < sizeof(OV5642_QVGA_Preview)/sizeof(OV5642_QVGA_Preview[0]); i++){
+    int i = 0;
+    while(OV5642_QVGA_Preview[i][0] != 0xffff && OV5642_QVGA_Preview[i][1] != 0xff){
       SCCB_write_reg(OV5642_QVGA_Preview[i][0], OV5642_QVGA_Preview[i][1]);
+      i++;
     }
+    i = 0;
     HAL_Delay(100);
     HAL_Delay(100);
-    for(int i=0; i < sizeof(OV5642_JPEG_Capture_QSXGA)/sizeof(OV5642_JPEG_Capture_QSXGA[0]); i++){
+    while(OV5642_JPEG_Capture_QSXGA[i][0] != 0xffff && OV5642_JPEG_Capture_QSXGA[i][1] != 0xff){
       SCCB_write_reg(OV5642_JPEG_Capture_QSXGA[i][0], OV5642_JPEG_Capture_QSXGA[i][1]);
+      i++;
     }
-    for(int i=0; i < sizeof(ov5642_640x480)/sizeof(ov5642_640x480[0]); i++){
+    i = 0;
+    while(ov5642_640x480[i][0] != 0xffff && ov5642_640x480[i][1] != 0xff){
       SCCB_write_reg(ov5642_640x480[i][0], ov5642_640x480[i][1]);
+      i++;
     }
     HAL_Delay(100);
     SCCB_write_reg(0x3818, 0xa8);
