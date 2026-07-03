@@ -44,6 +44,6 @@ static void CS_Select(){
     HAL_GPIO_WritePin(hov5642.cs_gpio_port, hov5642.cs_gpio_pin, GPIO_PIN_RESET);
 }
 
-static void CS_Select(){
+static void CS_Deelect(){
     HAL_GPIO_WritePin(hov5642.cs_gpio_port, hov5642.cs_gpio_pin, GPIO_PIN_SET);
 }
