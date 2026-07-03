@@ -5,7 +5,7 @@
 
 OV5642_StatusTypeDef ArduChip_write_reg(uint8_t reg_addr, uint8_t val);
 OV5642_StatusTypeDef ArduChip_read_reg(uint8_t reg_addr, uint8_t *val);
-OV5642_StatusTypeDef ArduChip_read_fifo(uint32_t length);
+OV5642_StatusTypeDef ArduChip_read_fifo(uint32_t length, uint8_t frame_buffer[]);
 
 static void CS_Select();
 static void CS_Deselect();

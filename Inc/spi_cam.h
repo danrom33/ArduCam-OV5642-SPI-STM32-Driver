@@ -15,14 +15,13 @@ typedef struct {
 } OV5642_HandleTypeDef;
 
 typedef enum {
-    OV5642_OK = 0,,
+    OV5642_OK = 0,
     OV5642_ERROR,
     OV5642_SPI_TIMEOUT,
     OV5642_I2C_TIMEOUT,
 } OV5642_StatusTypeDef;
 
-HAL_StatusTypeDef OV5642_Init(I2C_HandleTypeDef *hi2c, SPI_HandleTypeDef *hspi);
-HAL_StatusTypeDef 
+HAL_StatusTypeDef OV5642_Init(I2C_HandleTypeDef *hi2c, SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_gpio_port, uint16_t cs_gpio_pin);
 
 
 void Error_Handler(void);

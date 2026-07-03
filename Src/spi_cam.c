@@ -1,5 +1,7 @@
 #include "spi_cam.h"
 #include "camera_config.h"
+#include "sccb.h"
+#include "arduchip.h"
 
 
 static OV5642_HandleTypeDef hov5642;
@@ -89,7 +91,7 @@ int take_picture(void){
 
     uint32_t fifo_length = (length[2] << 0) + (length[1] << 8) + (length[0] << 16);
 
-    ArduChip_read_fifo(fifo_length);
+    ArduChip_read_fifo(fifo_length, frame_buffer);
 
     //FIFO Uses DMA so asnyc. Can do other stuff here later on...
     while(!fifo_read_complete);
@@ -106,7 +108,7 @@ HAL_StatusTypeDef OV5642_Init(I2C_HandleTypeDef *hi2c, SPI_HandleTypeDef *hspi, 
   hov5642.hi2c = hi2c;
   hov5642.hspi = hspi;
   hov5642.cs_gpio_port = cs_gpio_port;
-  hov5642.cs_gpio_pin = cs_gpio_pin
+  hov5642.cs_gpio_pin = cs_gpio_pin;
   return HAL_OK;
 }
 
@@ -114,7 +116,7 @@ HAL_StatusTypeDef OV5642_Init(I2C_HandleTypeDef *hi2c, SPI_HandleTypeDef *hspi, 
 
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-    if(hspi == &hspi1)
+    if(hspi == hov5642.hspi)
     {
       
       HAL_GPIO_WritePin(hov5642.cs_gpio_port, hov5642.cs_gpio_pin, GPIO_PIN_SET);
