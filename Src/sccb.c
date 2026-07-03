@@ -11,12 +11,12 @@ OV5642_StatusTypeDef SCCB_write_reg(uint16_t reg_addr, uint8_t value) {
   data[2] = value;
 
   if(HAL_I2C_IsDeviceReady(hov5642.hi2c, OV5642_WRITE_ADDR, 100, 200) != HAL_OK){
-    return OV5642_I2CTIMEOUT;
+    return OV5642_I2C_TIMEOUT;
   }
   HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(hov5642.hi2c, OV5642_WRITE_ADDR, data, 3, 1000);
   if(status != HAL_OK){
     if(status == HAL_TIMEOUT)
-        return OV5642_I2CTIMEOUT;
+        return OV5642_I2C_TIMEOUT;
     return OV5642_ERROR;
   }
   HAL_Delay(10);
