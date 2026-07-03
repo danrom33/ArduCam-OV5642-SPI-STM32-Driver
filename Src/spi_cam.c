@@ -135,11 +135,3 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
       }
   }
 }
-
-void Error_Handler(void)
-{
-    //Loop forever
-    while(1){
-
-    }
-}
