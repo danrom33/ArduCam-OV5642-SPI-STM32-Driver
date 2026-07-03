@@ -21,7 +21,9 @@ typedef enum {
     OV5642_I2C_TIMEOUT,
 } OV5642_StatusTypeDef;
 
-HAL_StatusTypeDef OV5642_Init(I2C_HandleTypeDef *hi2c, SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_gpio_port, uint16_t cs_gpio_pin);
+OV5642_HandleTypeDef OV5642_Init(I2C_HandleTypeDef *hi2c, SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_gpio_port, uint16_t cs_gpio_pin);
+
+OV5642_HandleTypeDef OV5642_Take_Picture();
 
 
 void Error_Handler(void);

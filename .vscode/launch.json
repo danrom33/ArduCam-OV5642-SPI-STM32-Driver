@@ -4,7 +4,6 @@
 //     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
 //     "version": "0.2.0",
 //     "configurations": [
-		
 //             {
 // 			"cwd": "${workspaceFolder}",
 // 			"executable": "./build/SRC/MAIN.elf",
@@ -26,22 +25,16 @@
             "name": "Debug with OpenOCD (ST-Link)",
             "type": "cortex-debug",
             "request": "launch",
-
             "cwd": "${workspaceFolder}",
             "executable": "./build/SRC/MAIN.elf",
-
             "servertype": "openocd",
-
             "device": "STM32L4R5",
-
             "configFiles": [
                 "interface/stlink-v2.cfg",
                 "target/stm32l4x.cfg"
             ],
-
             "runToEntryPoint": "main",
-            "showDevDebugOutput": "none",
-
+            "showDevDebugOutput": "raw",
             "svdFile": "STM32L4R5.svd",
         }
     ]

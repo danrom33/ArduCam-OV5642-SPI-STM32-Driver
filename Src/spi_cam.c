@@ -10,7 +10,7 @@ uint8_t frame_buffer[65535] = {0};
 uint32_t jpeg_length = 0;
 volatile uint8_t fifo_read_complete = 0;
 
-int take_picture(void){
+OV5642_HandleTypeDef OV5642_Take_Picture(void){
     
     HAL_Delay(500);
 
@@ -104,6 +104,8 @@ int take_picture(void){
     while(1){
       
     }
+
+    return HAL_OK;
 }
 
 HAL_StatusTypeDef OV5642_Init(I2C_HandleTypeDef *hi2c, SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_gpio_port, uint16_t cs_gpio_pin){
