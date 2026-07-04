@@ -6,7 +6,7 @@
 
 OV5642_HandleTypeDef hov5642;
 
-uint8_t buffer[];
+uint8_t *buffer;
 uint32_t jpeg_length = 0;
 volatile uint8_t fifo_read_complete = 0;
 
@@ -126,7 +126,7 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
       HAL_GPIO_WritePin(hov5642.cs_gpio_port, hov5642.cs_gpio_pin, GPIO_PIN_SET);
       for(int i = 0; i < 65535 - 1; i++)
       {
-          if(frame_buffer[i] == 0xFF && frame_buffer[i+1] == 0xD9)
+          if(buffer[i] == 0xFF && buffer[i+1] == 0xD9)
           {
               jpeg_length = i + 2;
               fifo_read_complete = 1;
