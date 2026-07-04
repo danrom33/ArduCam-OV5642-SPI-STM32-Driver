@@ -107,7 +107,7 @@ OV5642_StatusTypeDef OV5642_Test_Serial_Connection(){
     uint8_t attempts = 0;
     ArduChip_write_reg(0x00, 0x55);
 
-    while(attempts < 10 && !spi_con){
+    while(attempts < 10 && !spi_conn){
       ArduChip_read_reg(0x00, &reg_val);
       spi_conn = reg_val == 0x55;
       attempts++;
