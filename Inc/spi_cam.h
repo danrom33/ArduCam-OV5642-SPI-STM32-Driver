@@ -22,8 +22,9 @@ typedef enum {
 } OV5642_StatusTypeDef;
 
 OV5642_StatusTypeDef OV5642_Init(I2C_HandleTypeDef *hi2c, SPI_HandleTypeDef *hspi, GPIO_TypeDef *cs_gpio_port, uint16_t cs_gpio_pin);
-
 OV5642_StatusTypeDef OV5642_Take_Picture(uint8_t frame_buffer[], uint32_t *image_length);
+OV5642_StatusTypeDef OV5642_Set_Jpeg();
+OV5642_StatusTypeDef OV5642_Test_Serial_Connection()
 
 
 void Error_Handler(void);
