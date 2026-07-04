@@ -10,7 +10,7 @@ OV5642_HandleTypeDef hov5642;
 uint32_t jpeg_length = 0;
 volatile uint8_t fifo_read_complete = 0;
 
-OV5642_StatusTypeDef OV5642_Take_Picture(uint8_t frame_buffer[], uint32_t *length){
+OV5642_StatusTypeDef OV5642_Take_Picture(uint8_t frame_buffer[], uint32_t *image_length){
     
     HAL_Delay(500);
 
@@ -104,7 +104,7 @@ OV5642_StatusTypeDef OV5642_Take_Picture(uint8_t frame_buffer[], uint32_t *lengt
     while(!fifo_read_complete);
 
     ArduChip_write_reg(0x04, 0x01); //Clear FIFO flag
-    length = jpeg_length;
+    *image_length = jpeg_length;
     return OV5642_OK;
 }
 
