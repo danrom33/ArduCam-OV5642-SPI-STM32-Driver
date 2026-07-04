@@ -6,12 +6,12 @@
 
 OV5642_HandleTypeDef hov5642;
 
-// uint8_t frame_buffer[65535] = {0};
+uint8_t buffer[];
 uint32_t jpeg_length = 0;
 volatile uint8_t fifo_read_complete = 0;
 
 OV5642_StatusTypeDef OV5642_Take_Picture(uint8_t frame_buffer[], uint32_t *image_length){
-    
+    buffer = frame_buffer;
     HAL_Delay(500);
 
     uint8_t reg_val;
