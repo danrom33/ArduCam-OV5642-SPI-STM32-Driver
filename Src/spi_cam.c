@@ -104,11 +104,6 @@ OV5642_StatusTypeDef OV5642_Take_Picture(void){
     while(!fifo_read_complete);
 
     ArduChip_write_reg(0x04, 0x01); //Clear FIFO flag
-    
-    HAL_Delay(500);
-    while(1){
-      
-    }
 
     return OV5642_OK;
 }
