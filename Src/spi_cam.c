@@ -12,6 +12,9 @@ volatile uint8_t fifo_read_complete = 0;
 
 OV5642_StatusTypeDef OV5642_Take_Picture(uint8_t frame_buffer[], uint32_t *image_length){
     buffer = frame_buffer;
+    ArduChip_write_reg(0x03, 0x02); //Set VSync High
+    ArduChip_write_reg(0x04, 0x01); //Clear FIFO
+    ArduChip_write_reg(0x01, 0x00); //Set to capture 1 frame
     HAL_Delay(500);
 
     uint8_t reg_val;
@@ -89,10 +92,6 @@ OV5642_StatusTypeDef OV5642_Set_Jpeg(){
     SCCB_write_reg(0x4407, 0x08);
     SCCB_write_reg(0x5888, 0x00);
     SCCB_write_reg(0x5000, 0xFF);
-
-    ArduChip_write_reg(0x03, 0x02); //Set VSync High
-    ArduChip_write_reg(0x04, 0x01); //Clear FIFO
-    ArduChip_write_reg(0x01, 0x00); //Set to capture 1 frame
 
     return OV5642_OK;
 }
