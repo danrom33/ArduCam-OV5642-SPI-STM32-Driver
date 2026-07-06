@@ -12,16 +12,16 @@ volatile uint8_t fifo_read_complete = 0;
 
 OV5642_StatusTypeDef OV5642_Take_Picture(uint8_t frame_buffer[], uint32_t *image_length){
     buffer = frame_buffer;
-    ArduChip_write_reg(0x03, 0x02); //Set VSync High
-    ArduChip_write_reg(0x04, 0x01); //Clear FIFO
+    // ArduChip_write_reg(0x03, 0x02); //Set VSync High
+    // ArduChip_write_reg(0x04, 0x01); //Clear FIFO
     ArduChip_write_reg(0x01, 0x00); //Set to capture 1 frame
-    HAL_Delay(500);
+    // HAL_Delay(500);
 
     uint8_t reg_val;
 
     // printf("I2C Connection Tested and Valid\r\n");
 
-    HAL_Delay(100);
+    // HAL_Delay(100);
     // printf("Camera Configured\r\n");
 
     // printf("Transmitting Read Command over SPI...\r\n");
