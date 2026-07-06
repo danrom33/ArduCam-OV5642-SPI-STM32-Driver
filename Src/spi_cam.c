@@ -48,7 +48,8 @@ OV5642_StatusTypeDef OV5642_Take_Picture(uint8_t frame_buffer[], uint32_t *image
 
     //FIFO Uses DMA so asnyc. Can do other stuff here later on...
     while(!fifo_read_complete);
-
+    //Reset read_complete flag
+    fifo_read_complete = 0;
     ArduChip_write_reg(0x04, 0x01); //Clear FIFO flag
     *image_length = jpeg_length;
     return OV5642_OK;
