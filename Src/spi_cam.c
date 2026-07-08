@@ -3,6 +3,7 @@
 #include "sccb.h"
 #include "arduchip.h"
 
+#include <stdio.h>
 
 OV5642_HandleTypeDef hov5642;
 
@@ -12,6 +13,9 @@ volatile uint8_t fifo_read_complete = 0;
 
 OV5642_StatusTypeDef OV5642_Take_Picture(uint8_t frame_buffer[], uint32_t *image_length){
     buffer = frame_buffer;
+    //Reset read_complete flag
+    fifo_read_complete = 0;
+    ArduChip_write_reg(0x04, 0x01); //Clear FIFO flag
     // ArduChip_write_reg(0x03, 0x02); //Set VSync High
     // ArduChip_write_reg(0x04, 0x01); //Clear FIFO
     ArduChip_write_reg(0x01, 0x00); //Set to capture 1 frame
@@ -68,21 +72,23 @@ OV5642_StatusTypeDef OV5642_Init(I2C_HandleTypeDef *hi2c, SPI_HandleTypeDef *hsp
 
 OV5642_StatusTypeDef OV5642_Set_Jpeg(){
   SCCB_write_reg(0x3008, 0x80); //ov5642 reset reg 
+  HAL_Delay(100);
     int i = 0;
-    while(OV5642_QVGA_Preview[i][0] != 0xffff && OV5642_QVGA_Preview[i][1] != 0xff){
+    while(!(OV5642_QVGA_Preview[i][0] == 0xffff && OV5642_QVGA_Preview[i][1] == 0xff)){
       SCCB_write_reg(OV5642_QVGA_Preview[i][0], OV5642_QVGA_Preview[i][1]);
       i++;
     }
     i = 0;
     HAL_Delay(100);
-    HAL_Delay(100);
-    while(OV5642_JPEG_Capture_QSXGA[i][0] != 0xffff && OV5642_JPEG_Capture_QSXGA[i][1] != 0xff){
+    
+    while(!(OV5642_JPEG_Capture_QSXGA[i][0] == 0xffff && OV5642_JPEG_Capture_QSXGA[i][1] == 0xff)){
       SCCB_write_reg(OV5642_JPEG_Capture_QSXGA[i][0], OV5642_JPEG_Capture_QSXGA[i][1]);
       i++;
     }
     i = 0;
-    while(ov5642_640x480[i][0] != 0xffff && ov5642_640x480[i][1] != 0xff){
-      SCCB_write_reg(ov5642_640x480[i][0], ov5642_640x480[i][1]);
+    HAL_Delay(100);
+    while(!(ov5642_1024x768[i][0] == 0xffff && ov5642_1024x768[i][1] == 0xff)){
+      SCCB_write_reg(ov5642_1024x768[i][0], ov5642_1024x768[i][1]);
       i++;
     }
     HAL_Delay(100);
