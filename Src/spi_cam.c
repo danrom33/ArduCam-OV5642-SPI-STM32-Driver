@@ -5,6 +5,8 @@
 
 #include <stdio.h>
 
+static void Write_SensorConfigs(const uint16_t config[][2]);
+
 OV5642_HandleTypeDef hov5642;
 
 uint8_t *buffer;
@@ -59,7 +61,7 @@ OV5642_StatusTypeDef OV5642_Init(I2C_HandleTypeDef *hi2c, SPI_HandleTypeDef *hsp
 OV5642_StatusTypeDef OV5642_SetJpeg(){
   SCCB_write_reg(0x3008, 0x80); //ov5642 reset reg 
   HAL_Delay(100);
-  
+
   Write_SensorConfigs(OV5642_QVGA_Preview);
   Write_SensorConfigs(OV5642_JPEG_Capture_QSXGA);
  
