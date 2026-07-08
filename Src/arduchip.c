@@ -33,10 +33,21 @@ OV5642_StatusTypeDef ArduChip_read_reg(uint8_t reg_addr, uint8_t *val){
 
 OV5642_StatusTypeDef ArduChip_read_fifo(uint32_t length, uint8_t frame_buffer[])
 {
-  uint8_t dataTx = 0x3C;
+  uint8_t cmd = 0x3C;
 
   CS_Select();
-  HAL_StatusTypeDef status = HAL_SPI_TransmitReceive_DMA(hov5642.hspi, &dataTx, frame_buffer, length);
+
+  // Send the burst-read command byte ONCE, blocking (it's tiny).
+  // Do NOT resend this per-chunk - CS stays low across the whole capture,
+  // so resending would desync the camera's FIFO read pointer.
+  HAL_StatusTypeDef status = HAL_SPI_Transmit(hov5642.hspi, &cmd, 1, HAL_MAX_DELAY);
+  if (status != HAL_OK) {
+    CS_Deselect();
+    return (status == HAL_TIMEOUT) ? OV5642_SPI_TIMEOUT : OV5642_ERROR;
+  }
+
+  // Kick off the first chunk. Further chunks are chained from the callback.
+  OV5642_start_next_fifo_chunk(frame_buffer, length);
   return OV5642_OK;
 }
 
