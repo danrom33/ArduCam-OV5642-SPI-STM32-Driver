@@ -9,6 +9,9 @@ static void Write_SensorConfigs(const uint16_t config[][2]);
 
 OV5642_HandleTypeDef hov5642;
 
+uint32_t fifo_length;
+uint32_t bytes_read = 0;
+
 uint8_t *buffer;
 uint32_t jpeg_length = 0;
 volatile uint8_t fifo_read_complete = 0;
@@ -17,6 +20,7 @@ OV5642_StatusTypeDef OV5642_TakePicture(uint8_t frame_buffer[], uint32_t *image_
     buffer = frame_buffer;
     //Reset read_complete flag
     fifo_read_complete = 0;
+    bytes_read = 0;
     ArduChip_write_reg(0x04, 0x01); //Clear FIFO flag
     ArduChip_write_reg(0x01, 0x00); //Set to capture 1 frame
 
@@ -37,7 +41,7 @@ OV5642_StatusTypeDef OV5642_TakePicture(uint8_t frame_buffer[], uint32_t *image_
     ArduChip_read_reg(0x44, &reg_val);
     length[0] = reg_val;
 
-    uint32_t fifo_length = (length[2] << 0) + (length[1] << 8) + (length[0] << 16);
+    fifo_length = (length[2] << 0) + (length[1] << 8) + (length[0] << 16);
 
     ArduChip_read_fifo(fifo_length, frame_buffer);
 
@@ -149,16 +153,34 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
 {
     if(hspi == hov5642.hspi)
     {
-      
-      HAL_GPIO_WritePin(hov5642.cs_gpio_port, hov5642.cs_gpio_pin, GPIO_PIN_SET);
-      for(int i = 0; i < 65535 - 1; i++)
-      {
-          if(buffer[i] == 0xFF && buffer[i+1] == 0xD9)
-          {
-              jpeg_length = i + 2;
-              fifo_read_complete = 1;
-              break;
-          }
+      uint16_t chunk_just_read = (fifo_length - bytes_read > 65535) ? 65535 : fifo_length-bytes_read;
+      uint32_t chunk_start = bytes_read;
+      uint32_t chunk_end = bytes_read + chunk_just_read;
+      bytes_read = chunk_end;
+
+      //Look through new bytes for EOF (start from 1 before new chunk incase crosses over)
+      uint32_t search_start = (chunk_start > 0) ? chunk_start - 1 : 0;
+
+      if(bytes_read == fifo_length){
+        for(int i = search_start; i < chunk_end - 1; i++)
+        {
+            if(buffer[i] == 0xFF && buffer[i+1] == 0xD9)
+            {
+                jpeg_length = i + 2;
+                fifo_read_complete = 1;
+                HAL_GPIO_WritePin(hov5642.cs_gpio_port, hov5642.cs_gpio_pin, GPIO_PIN_SET);
+                return;
+            }
+        }
+        //Gone through whole write without finding EOF
+        jpeg_length = fifo_length;
+        fifo_read_complete = 1;
+        HAL_GPIO_WritePin(hov5642.cs_gpio_port, hov5642.cs_gpio_pin, GPIO_PIN_SET);
+        return;
+      }
+      else{
+        uint32_t remaining = fifo_length - bytes_read;
+        ArduChip_read_fifo(remaining, &buffer[bytes_read]);
       }
   }
 }
