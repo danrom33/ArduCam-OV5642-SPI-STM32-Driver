@@ -11,29 +11,15 @@ uint8_t *buffer;
 uint32_t jpeg_length = 0;
 volatile uint8_t fifo_read_complete = 0;
 
-OV5642_StatusTypeDef OV5642_Take_Picture(uint8_t frame_buffer[], uint32_t *image_length){
+OV5642_StatusTypeDef OV5642_TakePicture(uint8_t frame_buffer[], uint32_t *image_length){
     buffer = frame_buffer;
     //Reset read_complete flag
     fifo_read_complete = 0;
     ArduChip_write_reg(0x04, 0x01); //Clear FIFO flag
-    // ArduChip_write_reg(0x03, 0x02); //Set VSync High
-    // ArduChip_write_reg(0x04, 0x01); //Clear FIFO
     ArduChip_write_reg(0x01, 0x00); //Set to capture 1 frame
-    // HAL_Delay(500);
 
     uint8_t reg_val;
 
-    // printf("I2C Connection Tested and Valid\r\n");
-
-    // HAL_Delay(100);
-    // printf("Camera Configured\r\n");
-
-    // printf("Transmitting Read Command over SPI...\r\n");
-
-    
-
-    // //Delay for camera configs to sync
-    // HAL_Delay(500);
     ArduChip_write_reg(0x04, 0x02); //Start capture
     ArduChip_read_reg(0x41, &reg_val); //Is capture done?
     while(!(reg_val & 0b00001000)){
@@ -70,39 +56,52 @@ OV5642_StatusTypeDef OV5642_Init(I2C_HandleTypeDef *hi2c, SPI_HandleTypeDef *hsp
   return OV5642_OK;
 }
 
-OV5642_StatusTypeDef OV5642_Set_Jpeg(){
+OV5642_StatusTypeDef OV5642_SetJpeg(){
   SCCB_write_reg(0x3008, 0x80); //ov5642 reset reg 
   HAL_Delay(100);
-    int i = 0;
-    while(!(OV5642_QVGA_Preview[i][0] == 0xffff && OV5642_QVGA_Preview[i][1] == 0xff)){
-      SCCB_write_reg(OV5642_QVGA_Preview[i][0], OV5642_QVGA_Preview[i][1]);
-      i++;
-    }
-    i = 0;
-    HAL_Delay(100);
-    
-    while(!(OV5642_JPEG_Capture_QSXGA[i][0] == 0xffff && OV5642_JPEG_Capture_QSXGA[i][1] == 0xff)){
-      SCCB_write_reg(OV5642_JPEG_Capture_QSXGA[i][0], OV5642_JPEG_Capture_QSXGA[i][1]);
-      i++;
-    }
-    i = 0;
-    HAL_Delay(100);
-    while(!(ov5642_1024x768[i][0] == 0xffff && ov5642_1024x768[i][1] == 0xff)){
-      SCCB_write_reg(ov5642_1024x768[i][0], ov5642_1024x768[i][1]);
-      i++;
-    }
-    HAL_Delay(100);
-    SCCB_write_reg(0x3818, 0xa8);
-    SCCB_write_reg(0x3621, 0x10);
-    SCCB_write_reg(0x3801, 0xb0);
-    SCCB_write_reg(0x4407, 0x08);
-    SCCB_write_reg(0x5888, 0x00);
-    SCCB_write_reg(0x5000, 0xFF);
+  
+  Write_SensorConfigs(OV5642_QVGA_Preview);
+  Write_SensorConfigs(OV5642_JPEG_Capture_QSXGA);
+ 
+  SCCB_write_reg(0x3818, 0xa8);
+  SCCB_write_reg(0x3621, 0x10);
+  SCCB_write_reg(0x3801, 0xb0);
+  SCCB_write_reg(0x4407, 0x08);
+  SCCB_write_reg(0x5888, 0x00);
+  SCCB_write_reg(0x5000, 0xFF);
 
-    return OV5642_OK;
+  return OV5642_OK;
 }
 
-OV5642_StatusTypeDef OV5642_Test_Serial_Connection(){
+OV5642_StatusTypeDef OV5642_SetResolution(OV5642_Resolution res){
+  switch(res){
+    case OV5642_320x240:
+      Write_SensorConfigs(ov5642_320x240);
+      return OV5642_OK;
+    case OV5642_640x480:
+      Write_SensorConfigs(ov5642_640x480);
+      return OV5642_OK;
+    case OV5642_1024x768:
+      Write_SensorConfigs(ov5642_1024x768);
+      return OV5642_OK;
+    case OV5642_1280x960:
+      Write_SensorConfigs(ov5642_1280x960);
+      return OV5642_OK;
+    case OV5642_1600x1200:
+      Write_SensorConfigs(ov5642_1600x1200);
+      return OV5642_OK;
+    case OV5642_2048x1536:
+      Write_SensorConfigs(ov5642_2048x1536);
+      return OV5642_OK;
+    case OV5642_2592x1944:
+      Write_SensorConfigs(ov5642_2592x1944);
+      return OV5642_OK;
+    default:
+      return OV5642_ERROR;
+  }
+}
+
+OV5642_StatusTypeDef OV5642_TestSerialConnection(){
 
     uint8_t reg_val;
    //Reset CPLD 
@@ -159,5 +158,14 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
               break;
           }
       }
+  }
+}
+
+static void Write_SensorConfigs(const uint16_t config[][2]){
+  uint16_t i = 0;
+
+  while(!(config[i][0] == 0xffff && config[i][1] == 0xff)) {
+    SCCB_write_reg(config[i][0], config[i][1]);
+    i++;
   }
 }
