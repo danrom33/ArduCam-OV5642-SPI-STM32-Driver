@@ -9,11 +9,6 @@ static void Write_SensorConfigs(const uint16_t config[][2]);
 
 OV5642_HandleTypeDef hov5642;
 
-static uint8_t  *fifo_rx_ptr;
-static uint32_t fifo_total_length;
-static uint32_t fifo_bytes_received;
-static uint16_t fifo_current_chunk;
-
 uint8_t *buffer;
 uint32_t jpeg_length = 0;
 volatile uint8_t fifo_read_complete = 0;
@@ -148,53 +143,24 @@ OV5642_StatusTypeDef OV5642_TestSerialConnection(){
     return OV5642_OK;
 }
 
-void OV5642_start_next_fifo_chunk(uint8_t *dst, uint32_t total_length)
+
+
+void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-    fifo_rx_ptr          = dst;
-    fifo_total_length    = total_length;
-    fifo_bytes_received  = 0;
-    fifo_current_chunk   = (total_length > 65535) ? 65535 : (uint16_t)total_length;
-
-    HAL_SPI_Receive_DMA(hov5642.hspi, fifo_rx_ptr, fifo_current_chunk);
-}
-
-
-
-void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
-{
-    if (hspi != hov5642.hspi) return;
-
-    uint32_t chunk_start = fifo_bytes_received;
-    uint32_t chunk_end    = fifo_bytes_received + fifo_current_chunk;
-    fifo_bytes_received   = chunk_end;
-
-    // Search this chunk for EOI, overlapping by 1 byte in case the
-    // marker straddles a chunk boundary
-    uint32_t search_start = (chunk_start > 0) ? chunk_start - 1 : 0;
-    for (uint32_t i = search_start; i + 1 < chunk_end; i++)
+    if(hspi == hov5642.hspi)
     {
-        if (buffer[i] == 0xFF && buffer[i + 1] == 0xD9)
-        {
-            jpeg_length = i + 2;
-            fifo_read_complete = 1;
-            HAL_GPIO_WritePin(hov5642.cs_gpio_port, hov5642.cs_gpio_pin, GPIO_PIN_SET);
-            return;
-        }
-    }
-
-    if (fifo_bytes_received >= fifo_total_length)
-    {
-        // Ran out of FIFO data without finding EOI - treat whole read as the image
-        jpeg_length = fifo_total_length;
-        fifo_read_complete = 1;
-        HAL_GPIO_WritePin(hov5642.cs_gpio_port, hov5642.cs_gpio_pin, GPIO_PIN_SET);
-        return;
-    }
-
-    // More data to pull - continue the same logical transaction (CS stays low)
-    uint32_t remaining = fifo_total_length - fifo_bytes_received;
-    fifo_current_chunk = (remaining > 65535) ? 6535 : (uint16_t)remaining;
-    HAL_SPI_Receive_DMA(hov5642.hspi, &fifo_rx_ptr[fifo_bytes_received], fifo_current_chunk);
+      
+      HAL_GPIO_WritePin(hov5642.cs_gpio_port, hov5642.cs_gpio_pin, GPIO_PIN_SET);
+      for(int i = 0; i < 65535 - 1; i++)
+      {
+          if(buffer[i] == 0xFF && buffer[i+1] == 0xD9)
+          {
+              jpeg_length = i + 2;
+              fifo_read_complete = 1;
+              break;
+          }
+      }
+  }
 }
 
 static void Write_SensorConfigs(const uint16_t config[][2]){
