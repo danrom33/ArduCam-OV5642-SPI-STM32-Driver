@@ -193,7 +193,7 @@ void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 
     // More data to pull - continue the same logical transaction (CS stays low)
     uint32_t remaining = fifo_total_length - fifo_bytes_received;
-    fifo_current_chunk = (remaining > SPI_MAX_CHUNK) ? SPI_MAX_CHUNK : (uint16_t)remaining;
+    fifo_current_chunk = (remaining > 65535) ? 6535 : (uint16_t)remaining;
     HAL_SPI_Receive_DMA(hov5642.hspi, &fifo_rx_ptr[fifo_bytes_received], fifo_current_chunk);
 }
 
