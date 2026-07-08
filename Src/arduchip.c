@@ -35,18 +35,8 @@ OV5642_StatusTypeDef ArduChip_read_fifo(uint32_t length, uint8_t frame_buffer[])
 {
   uint8_t dataTx = 0x3C;
 
-  //Issue command to start burst-read operation
   CS_Select();
-  HAL_StatusTypeDef status = HAL_SPI_Transmit(hov5642.hspi, &dataTx, 1, HAL_MAX_DELAY);
-  if(status != HAL_OK){
-    CS_Deselect();
-    return (status == HAL_TIMEOUT) ? OV5642_SPI_TIMEOUT : OV5642_ERROR;
-  }
-
-  HAL_Delay(100);
-
-  //Receive from FIFO
-  status = HAL_SPI_Receive_DMA(hov5642.hspi, frame_buffer, length);
+  HAL_StatusTypeDef status = HAL_SPI_TransmitReceive_DMA(hov5642.hspi, &dataTx, frame_buffer, length);
   return OV5642_OK;
 }
 

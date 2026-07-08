@@ -145,7 +145,7 @@ OV5642_StatusTypeDef OV5642_TestSerialConnection(){
 
 
 
-void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
+void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
 {
     if(hspi == hov5642.hspi)
     {
